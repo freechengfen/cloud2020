@@ -33,7 +33,7 @@ Sentinel：[https://github.com/alibaba/Sentinel/wiki/%E4%BB%8B%E7%BB%8D](https:/
 在Hystrix基础上增加了流控规则和持久化,alibaba体系的一员。
 
 
-##eureka
+## eureka
     简介：服务注册中心
     原理：服务提供者注册在eureka上之后回吧自己的信息放在eureka上，消费者就从eureka上获取消息，并放在自己的jvm中
           调用服务提供者(底层还是用httpclient)。每三十秒再从eureka上获取提供者的信息
@@ -50,15 +50,15 @@ Sentinel：[https://github.com/alibaba/Sentinel/wiki/%E4%BB%8B%E7%BB%8D](https:/
       1.注意依赖的zookeeper的版本和安装的zookeeper是一致的
       2.临时结点（创建结点的宕机了，就消失了）、永久结点  
         服务注册结点是 临时节点
-##consul 注册中心(go 写的)
+## consul 注册中心(go 写的)
        eureka 满足的是ap(cap),consul/zookeeper 满足的是cp 
-##ribbon  负载均衡  
+## ribbon  负载均衡  
       1.核心组件 iRule 
           roundrobinrule、randomrule、retryrule、bestAviable、
       2.创建自己的IRule 不能放在@component-scan包下
       3.在主启动类上配置@ribbonClient、负载平衡规则
       
-##openfeign 服务调用,接口调用 底层有ribbon
+## openfeign 服务调用,接口调用 底层有ribbon
       1.没有使用restemlate 直接调用接口就行
             主启动类加上@EnableFeignClients  接口上添加@FeignClient(value = "CLOUD-PAYMENT-SERVICE") 
             自带负载均衡ribbon
@@ -67,7 +67,7 @@ Sentinel：[https://github.com/alibaba/Sentinel/wiki/%E4%BB%8B%E7%BB%8D](https:/
             ribbon.ReadTimeout=1000 //处理请求的超时时间，默认为1秒
             ribbon.ConnectTimeout=1000 //连接建立的超时时长，默认1秒
       3.feign日志以什么级别监控那个接口
-##hystrix
+## hystrix
       1.服务降级
          简介：服务断线，给个备选方案
          1. 主程序上标注
@@ -96,7 +96,7 @@ Sentinel：[https://github.com/alibaba/Sentinel/wiki/%E4%BB%8B%E7%BB%8D](https:/
               自己服务出错或超时
            hutool工具包
        4.hystrix dashboard
-##服务网关  zuul gateway
+## 服务网关  zuul gateway
        1.gateway  底部集成了netty包 非阻塞式
            调用架构：前端 -> nginx -> 网关-> 微服务   
        2.三大核心：路由、断言、过滤
@@ -105,7 +105,7 @@ Sentinel：[https://github.com/alibaba/Sentinel/wiki/%E4%BB%8B%E7%BB%8D](https:/
            过滤: 
               自定义过滤器，实现GlobalFilter,Ordered
            路由转发，执行过滤链
-##服务配置 config
+## 服务配置 config
        简介： 集中管理微服务的配置、动态化的配置不同环境的配置。就是把配置文件放在github 然后读取github上的配置信息  
               创建config-center(3344): 通过访问config-center 获取在github上的文件
                 1.主启动类 添加 @EnableConfigServer
@@ -117,10 +117,10 @@ Sentinel：[https://github.com/alibaba/Sentinel/wiki/%E4%BB%8B%E7%BB%8D](https:/
                问题：github上配置文件修改之后，center(3344)可以收到,client(3355)收不到。因此需要使用@refreshScope
                     然后运维人员发个post http://localhost:3355/actuator/refresh
                     每次都要使用去发送post ?  使用bus
-##消息bus 
+## 消息bus 
        简介：分布式自动刷新配置功能  支持rabbitMq和kafka
          推送给各个服务消息 使用rabbitmq 
-##stream 消息驱动
+## stream 消息驱动
           屏蔽消息中间件的具体实现，只关注消息的模型 目前只支持 rabbitmq\kafka
           binder 屏蔽消息中间件的具体实现  source、sink 表示来源
           消息生成者，
@@ -157,17 +157,45 @@ Sentinel：[https://github.com/alibaba/Sentinel/wiki/%E4%BB%8B%E7%BB%8D](https:/
                        }
                 ```
           重复消费问题的出现？
-          8801 消息生成者   8802、8803消息消费者
-          sluth 
+              8801 消息生成者   8802、8803(集群)消息消费者  
+              把8802、8803设置成相同的组
+          持久化
+            我们发现有指定分组的服务8803，消息可以持久化，即使服务中途断开后重启仍然可以获得，
+            而未指定分组的服务就会丢失断开期间发送到MQ的消息
+## sluth 求链路跟踪整合了zipkin
               请求链路跟踪   
 
-sluth:请求链路跟踪整合了zipkin
 
-##alibaba
-   nacos->config、bus 服务注册、配置中心
-     
-   sentinel ->hystrix 
-       流控规则 qps 每秒请求数
-       sentinel (降级)是没有半开状态的
-
-
+## alibaba
+   ### nacos->eureka+config+bus 服务注册、配置中心、总线
+     直接下载 start.up
+     1.服务注册
+     2.配置中心 DataId、namespace、group
+     3.nacos集群  持久化     
+   ### sentinel ->hystrix 
+     1.流控规则
+        关联
+        直接
+        链路
+        结果 ：快速失败、warm up 、排队等待
+     2.降级规则
+        RT、异常比例、异常数 时间窗口之后 熔断器关闭 恢复正常
+     3.自定义兜底逻辑、和代码耦合了的处理
+        @sentinelResource
+     sentinal 服务停止、宕机过后，规则会消失。消失消息的持久化问题？
+       配置持久化到nacos
+   ### seata 分布式事物
+      简介：各个未付无之间只能保证自己本地的事务，而不能保证全局事务的一直性
+      tc 事务协调者  tm 事务管理者  rm 资源管理者
+      1.tm 向tc发出请求，生成一个全局事务id,并把这个事务id 分发给调用链上的微服务。
+      2.rm 想tc注册进事务。 
+      3.tm 向tc提出提交或回滚事务
+      4.tc向其中的 xid 下的事务提交或回滚
+   ### 唯一主键的生成
+       唯一id生成。
+           id要求： 唯一，趋势递增，时间戳
+           性能要求：高可用、低延迟，高qps
+        方式：   
+           1.uuid:可以保证唯一性，但是对数据库不友好。因为作为主键是要成为索引的，uuid是无序的因此对于数据库的性能有所消耗，每次都要重新编排索引。因此不是很友好。降低插入的性能
+           2.可以使用redis 但是要使用步长
+           3.雪花算法  64bit   1bit:表示符号位 41bit表示时间戳、10bit表示工作机器id datasourceId、workid   12bit：同毫秒内产生不同的id
